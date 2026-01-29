@@ -45,3 +45,4 @@ sqlalchemy==2.0.37
 psycopg[binary]==3.2.5
 passlib[bcrypt]==1.7.4
 python-jose==3.3.0
+Pillow==10.4.0

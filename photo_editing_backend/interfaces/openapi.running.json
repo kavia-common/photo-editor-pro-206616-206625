@@ -1,1 +1,982 @@
-{"openapi":"3.1.0","info":{"title":"FastAPI","version":"0.1.0"},"paths":{"/":{"get":{"summary":"Health Check","operationId":"health_check__get","responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{}}}}}}}}}
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Photo Editing Backend",
+    "description": "Backend for a photo editing app. Provides JWT authentication, image upload/storage, basic editing operations (crop/filters/brightness/contrast), and PostgreSQL persistence.",
+    "version": "0.3.0"
+  },
+  "paths": {
+    "/": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Health check",
+        "description": "Basic liveness endpoint.",
+        "operationId": "health_check___get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/register": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Register",
+        "description": "Register a new user account. Returns the created user (without password).",
+        "operationId": "register_auth_register_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPublic"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict"
+          }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Login",
+        "description": "Login with email/password and receive a JWT access token.",
+        "operationId": "login_auth_login_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Current user",
+        "description": "Get the currently authenticated user.",
+        "operationId": "me_auth_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPublic"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/images/upload": {
+      "post": {
+        "tags": [
+          "images"
+        ],
+        "summary": "Upload image",
+        "description": "Upload an image file. Persists metadata and stores bytes in backend local storage.",
+        "operationId": "upload_image_images_upload_post",
+        "parameters": [
+          {
+            "name": "title",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Title"
+            },
+            "description": "Optional title for the image"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_image_images_upload_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageCreateResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/images": {
+      "get": {
+        "tags": [
+          "images"
+        ],
+        "summary": "List images",
+        "description": "List images owned by the authenticated user.",
+        "operationId": "list_images_images_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            },
+            "description": "Max number of images to return"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            },
+            "description": "Pagination offset"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ImageListItem"
+                  },
+                  "title": "Response List Images Images Get"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/images/{image_id}": {
+      "get": {
+        "tags": [
+          "images"
+        ],
+        "summary": "Get image metadata",
+        "description": "Fetch a single image metadata record owned by the authenticated user.",
+        "operationId": "get_image_images__image_id__get",
+        "parameters": [
+          {
+            "name": "image_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Image Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/images/{image_id}/save": {
+      "post": {
+        "tags": [
+          "images"
+        ],
+        "summary": "Save edited image",
+        "description": "Persist an edited image sent as a data URL. Stores bytes as the current version and updates metadata.\n\nUsed by the frontend when running in LIVE API mode.",
+        "operationId": "save_edited_image_images__image_id__save_post",
+        "parameters": [
+          {
+            "name": "image_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Image Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveImageRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveImageResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/images/{image_id}/file": {
+      "get": {
+        "tags": [
+          "images"
+        ],
+        "summary": "Get image file",
+        "description": "Download the current version of an image; falls back to original if not edited yet.",
+        "operationId": "get_image_file_images__image_id__file_get",
+        "parameters": [
+          {
+            "name": "image_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Image Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/images/{image_id}/edit/crop": {
+      "post": {
+        "tags": [
+          "editing"
+        ],
+        "summary": "Crop image",
+        "description": "Crop an image and set the result as the current version.",
+        "operationId": "edit_crop_images__image_id__edit_crop_post",
+        "parameters": [
+          {
+            "name": "image_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Image Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CropRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageListItem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/images/{image_id}/edit/brightness": {
+      "post": {
+        "tags": [
+          "editing"
+        ],
+        "summary": "Adjust brightness",
+        "description": "Adjust brightness and set result as current version. Value typically in [0.0, 2.0] where 1.0 is no-op.",
+        "operationId": "edit_brightness_images__image_id__edit_brightness_post",
+        "parameters": [
+          {
+            "name": "image_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Image Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdjustRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageListItem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/images/{image_id}/edit/contrast": {
+      "post": {
+        "tags": [
+          "editing"
+        ],
+        "summary": "Adjust contrast",
+        "description": "Adjust contrast and set result as current version. Value typically in [0.0, 2.0] where 1.0 is no-op.",
+        "operationId": "edit_contrast_images__image_id__edit_contrast_post",
+        "parameters": [
+          {
+            "name": "image_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Image Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdjustRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageListItem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/images/{image_id}/edit/filter": {
+      "post": {
+        "tags": [
+          "editing"
+        ],
+        "summary": "Apply filter",
+        "description": "Apply a named filter (grayscale/sepia/invert) and set result as current version.",
+        "operationId": "edit_filter_images__image_id__edit_filter_post",
+        "parameters": [
+          {
+            "name": "image_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Image Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FilterRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageListItem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AdjustRequest": {
+        "properties": {
+          "value": {
+            "type": "number",
+            "title": "Value",
+            "description": "Adjustment value. brightness/contrast use 0.0-2.0 where 1.0 is no-op."
+          }
+        },
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "title": "AdjustRequest"
+      },
+      "CropRequest": {
+        "properties": {
+          "x": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "X",
+            "description": "Left offset in pixels"
+          },
+          "y": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Y",
+            "description": "Top offset in pixels"
+          },
+          "width": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "title": "Width",
+            "description": "Crop width in pixels"
+          },
+          "height": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "title": "Height",
+            "description": "Crop height in pixels"
+          }
+        },
+        "type": "object",
+        "required": [
+          "x",
+          "y",
+          "width",
+          "height"
+        ],
+        "title": "CropRequest"
+      },
+      "FilterRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": [
+              "grayscale",
+              "sepia",
+              "invert"
+            ],
+            "title": "Name",
+            "description": "Filter name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "FilterRequest"
+      },
+      "HealthResponse": {
+        "properties": {
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "Health status message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "message"
+        ],
+        "title": "HealthResponse"
+      },
+      "ImageCreateResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id",
+            "description": "Image ID"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title",
+            "description": "Image title"
+          },
+          "original_storage_key": {
+            "type": "string",
+            "title": "Original Storage Key",
+            "description": "Storage key for the originally uploaded image"
+          },
+          "current_storage_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Storage Key",
+            "description": "Storage key for latest edited image"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "Created timestamp"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "original_storage_key",
+          "current_storage_key",
+          "created_at"
+        ],
+        "title": "ImageCreateResponse"
+      },
+      "ImageListItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id",
+            "description": "Image ID"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title",
+            "description": "Title"
+          },
+          "original_storage_key": {
+            "type": "string",
+            "title": "Original Storage Key",
+            "description": "Original storage key"
+          },
+          "current_storage_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Storage Key",
+            "description": "Current storage key (edited)"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "Created timestamp"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At",
+            "description": "Updated timestamp"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "original_storage_key",
+          "current_storage_key",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ImageListItem"
+      },
+      "LoginRequest": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "title": "Email",
+            "description": "User email address"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password",
+            "description": "User password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "LoginRequest"
+      },
+      "RegisterRequest": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "title": "Email",
+            "description": "User email address"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 6,
+            "title": "Password",
+            "description": "User password (min 6 chars)"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name",
+            "description": "Optional display name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email",
+          "password",
+          "display_name"
+        ],
+        "title": "RegisterRequest"
+      },
+      "SaveImageRequest": {
+        "properties": {
+          "editedDataUrl": {
+            "type": "string",
+            "title": "Editeddataurl",
+            "description": "Edited image as a data URL (image/png or image/jpeg)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "editedDataUrl"
+        ],
+        "title": "SaveImageRequest"
+      },
+      "SaveImageResponse": {
+        "properties": {
+          "image": {
+            "$ref": "#/components/schemas/ImageListItem"
+          }
+        },
+        "type": "object",
+        "required": [
+          "image"
+        ],
+        "title": "SaveImageResponse"
+      },
+      "TokenResponse": {
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "title": "Access Token",
+            "description": "JWT bearer token"
+          },
+          "token_type": {
+            "type": "string",
+            "enum": [
+              "bearer"
+            ],
+            "title": "Token Type",
+            "description": "Token type",
+            "default": "bearer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "access_token"
+        ],
+        "title": "TokenResponse"
+      },
+      "UserPublic": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id",
+            "description": "User ID"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email",
+            "description": "Email"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name",
+            "description": "Display name"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "Created timestamp"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At",
+            "description": "Updated timestamp"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "display_name",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "UserPublic"
+      },
+      "Body_upload_image_images_upload_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "title": "File",
+            "description": "Image file to upload"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_image_images_upload_post"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

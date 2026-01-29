@@ -411,10 +411,34 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "Binary image response (the image bytes).",
             "content": {
               "application/json": {
                 "schema": {}
+              },
+              "image/jpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/webp": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
               }
             }
           },

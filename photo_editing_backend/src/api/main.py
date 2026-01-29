@@ -106,6 +106,18 @@ class SaveImageResponse(BaseModel):
     image: ImageListItem = Field(..., description="Updated image record.")
 
 
+class ImageMeta(BaseModel):
+    id: uuid.UUID = Field(..., description="Image ID")
+    title: Optional[str] = Field(None, description="Image title")
+    createdAt: Optional[str] = Field(None, description="Created timestamp (ISO8601)")
+    updatedAt: Optional[str] = Field(None, description="Updated timestamp (ISO8601)")
+    url: str = Field(..., description="URL to download the current image file")
+
+
+class GetImageResponse(BaseModel):
+    image: ImageMeta = Field(..., description="Image metadata payload for the frontend.")
+
+
 # PUBLIC_INTERFACE
 @app.get("/", response_model=HealthResponse, tags=["health"], summary="Health check", description="Basic liveness endpoint.")
 def health_check() -> HealthResponse:
@@ -331,6 +343,7 @@ def list_images(
 # PUBLIC_INTERFACE
 @app.get(
     "/images/{image_id}",
+    response_model=GetImageResponse,
     tags=["images"],
     summary="Get image metadata",
     description="Fetch a single image metadata record owned by the authenticated user.",
@@ -339,19 +352,19 @@ def get_image(
     image_id: uuid.UUID,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-) -> dict:
+) -> GetImageResponse:
     user_id = uuid.UUID(str(current_user["id"]))
     img = _get_image_owned(db, user_id=user_id, image_id=image_id)
-    # Frontend expects either {image: {...}} or raw object; we return {image:...} and include url helper.
-    return {
-        "image": {
-            "id": str(img["id"]),
-            "title": img.get("title"),
-            "createdAt": img["created_at"].isoformat() if img.get("created_at") else None,
-            "updatedAt": img["updated_at"].isoformat() if img.get("updated_at") else None,
-            "url": _image_file_url(image_id),
-        }
-    }
+
+    return GetImageResponse(
+        image=ImageMeta(
+            id=uuid.UUID(str(img["id"])),
+            title=img.get("title"),
+            createdAt=img["created_at"].isoformat() if img.get("created_at") else None,
+            updatedAt=img["updated_at"].isoformat() if img.get("updated_at") else None,
+            url=_image_file_url(image_id),
+        )
+    )
 
 
 # PUBLIC_INTERFACE

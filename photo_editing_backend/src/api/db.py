@@ -88,22 +88,40 @@ def build_postgres_dsn() -> str:
     return f"postgresql+psycopg://{user}:{password}@{host}:{effective_port}/{db}"
 
 
+_ENGINE: Optional[Engine] = None
+_SESSIONMAKER: Optional[sessionmaker] = None
+
+
 def get_engine() -> Engine:
-    dsn = build_postgres_dsn()
-    return create_engine(
-        dsn,
-        pool_pre_ping=True,
-        future=True,
-    )
+    """
+    Get (and lazily create) the SQLAlchemy engine.
+
+    Important: We intentionally do NOT create the engine at import-time because that would
+    require POSTGRES_* env vars to be present just to import the FastAPI app / generate OpenAPI.
+    """
+    global _ENGINE
+    if _ENGINE is None:
+        dsn = build_postgres_dsn()
+        _ENGINE = create_engine(
+            dsn,
+            pool_pre_ping=True,
+            future=True,
+        )
+    return _ENGINE
 
 
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=get_engine())
+def _get_sessionmaker() -> sessionmaker:
+    """Create (or reuse) the global sessionmaker bound to the lazy engine."""
+    global _SESSIONMAKER
+    if _SESSIONMAKER is None:
+        _SESSIONMAKER = sessionmaker(autocommit=False, autoflush=False, bind=get_engine())
+    return _SESSIONMAKER
 
 
 # PUBLIC_INTERFACE
 def get_db() -> Generator[Session, None, None]:
     """FastAPI dependency that yields a SQLAlchemy session and guarantees close()."""
-    db = SessionLocal()
+    db = _get_sessionmaker()()
     try:
         yield db
     finally:

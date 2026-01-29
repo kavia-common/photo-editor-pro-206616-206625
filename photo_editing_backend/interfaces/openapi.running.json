@@ -13,7 +13,7 @@
         ],
         "summary": "Health check",
         "description": "Basic liveness endpoint.",
-        "operationId": "health_check___get",
+        "operationId": "health_check__get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -37,14 +37,14 @@
         "description": "Register a new user account. Returns the created user (without password).",
         "operationId": "register_auth_register_post",
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/RegisterRequest"
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "200": {
@@ -57,8 +57,15 @@
               }
             }
           },
-          "409": {
-            "description": "Conflict"
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
         }
       }
@@ -72,14 +79,14 @@
         "description": "Login with email/password and receive a JWT access token.",
         "operationId": "login_auth_login_post",
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/LoginRequest"
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "200": {
@@ -92,8 +99,15 @@
               }
             }
           },
-          "401": {
-            "description": "Unauthorized"
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
         }
       }
@@ -116,9 +130,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "description": "Unauthorized"
           }
         },
         "security": [
@@ -136,6 +147,11 @@
         "summary": "Upload image",
         "description": "Upload an image file. Persists metadata and stores bytes in backend local storage.",
         "operationId": "upload_image_images_upload_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "title",
@@ -150,6 +166,7 @@
                   "type": "null"
                 }
               ],
+              "description": "Optional title for the image",
               "title": "Title"
             },
             "description": "Optional title for the image"
@@ -176,15 +193,17 @@
               }
             }
           },
-          "401": {
-            "description": "Unauthorized"
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
+        }
       }
     },
     "/images": {
@@ -195,6 +214,11 @@
         "summary": "List images",
         "description": "List images owned by the authenticated user.",
         "operationId": "list_images_images_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "limit",
@@ -204,6 +228,7 @@
               "type": "integer",
               "maximum": 200,
               "minimum": 1,
+              "description": "Max number of images to return",
               "default": 50,
               "title": "Limit"
             },
@@ -216,6 +241,7 @@
             "schema": {
               "type": "integer",
               "minimum": 0,
+              "description": "Pagination offset",
               "default": 0,
               "title": "Offset"
             },
@@ -237,15 +263,17 @@
               }
             }
           },
-          "401": {
-            "description": "Unauthorized"
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
+        }
       }
     },
     "/images/{image_id}": {
@@ -256,6 +284,11 @@
         "summary": "Get image metadata",
         "description": "Fetch a single image metadata record owned by the authenticated user.",
         "operationId": "get_image_images__image_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "image_id",
@@ -273,22 +306,25 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Image Images  Image Id  Get"
+                }
               }
             }
           },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Not Found"
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
+        }
       }
     },
     "/images/{image_id}/save": {
@@ -299,6 +335,11 @@
         "summary": "Save edited image",
         "description": "Persist an edited image sent as a data URL. Stores bytes as the current version and updates metadata.\n\nUsed by the frontend when running in LIVE API mode.",
         "operationId": "save_edited_image_images__image_id__save_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "image_id",
@@ -332,18 +373,17 @@
               }
             }
           },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Not Found"
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
+        }
       }
     },
     "/images/{image_id}/file": {
@@ -354,6 +394,11 @@
         "summary": "Get image file",
         "description": "Download the current version of an image; falls back to original if not edited yet.",
         "operationId": "get_image_file_images__image_id__file_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "image_id",
@@ -368,20 +413,24 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
           },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Not Found"
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
+        }
       }
     },
     "/images/{image_id}/edit/crop": {
@@ -392,6 +441,11 @@
         "summary": "Crop image",
         "description": "Crop an image and set the result as the current version.",
         "operationId": "edit_crop_images__image_id__edit_crop_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "image_id",
@@ -425,18 +479,17 @@
               }
             }
           },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Not Found"
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
+        }
       }
     },
     "/images/{image_id}/edit/brightness": {
@@ -445,8 +498,13 @@
           "editing"
         ],
         "summary": "Adjust brightness",
-        "description": "Adjust brightness and set result as current version. Value typically in [0.0, 2.0] where 1.0 is no-op.",
+        "description": "Adjust brightness and set result as current version. Value typically in [0.0, 2.0].",
         "operationId": "edit_brightness_images__image_id__edit_brightness_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "image_id",
@@ -480,18 +538,17 @@
               }
             }
           },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Not Found"
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
+        }
       }
     },
     "/images/{image_id}/edit/contrast": {
@@ -500,8 +557,13 @@
           "editing"
         ],
         "summary": "Adjust contrast",
-        "description": "Adjust contrast and set result as current version. Value typically in [0.0, 2.0] where 1.0 is no-op.",
+        "description": "Adjust contrast and set result as current version. Value typically in [0.0, 2.0].",
         "operationId": "edit_contrast_images__image_id__edit_contrast_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "image_id",
@@ -535,18 +597,17 @@
               }
             }
           },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Not Found"
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
+        }
       }
     },
     "/images/{image_id}/edit/filter": {
@@ -557,6 +618,11 @@
         "summary": "Apply filter",
         "description": "Apply a named filter (grayscale/sepia/invert) and set result as current version.",
         "operationId": "edit_filter_images__image_id__edit_filter_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "image_id",
@@ -590,18 +656,17 @@
               }
             }
           },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Not Found"
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
+        }
       }
     }
   },
@@ -621,29 +686,44 @@
         ],
         "title": "AdjustRequest"
       },
+      "Body_upload_image_images_upload_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "title": "File",
+            "description": "Image file to upload"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_image_images_upload_post"
+      },
       "CropRequest": {
         "properties": {
           "x": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "X",
             "description": "Left offset in pixels"
           },
           "y": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Y",
             "description": "Top offset in pixels"
           },
           "width": {
             "type": "integer",
-            "exclusiveMinimum": 0,
+            "exclusiveMinimum": 0.0,
             "title": "Width",
             "description": "Crop width in pixels"
           },
           "height": {
             "type": "integer",
-            "exclusiveMinimum": 0,
+            "exclusiveMinimum": 0.0,
             "title": "Height",
             "description": "Crop height in pixels"
           }
@@ -675,6 +755,19 @@
           "name"
         ],
         "title": "FilterRequest"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
       },
       "HealthResponse": {
         "properties": {
@@ -737,9 +830,7 @@
         "type": "object",
         "required": [
           "id",
-          "title",
           "original_storage_key",
-          "current_storage_key",
           "created_at"
         ],
         "title": "ImageCreateResponse"
@@ -797,9 +888,7 @@
         "type": "object",
         "required": [
           "id",
-          "title",
           "original_storage_key",
-          "current_storage_key",
           "created_at",
           "updated_at"
         ],
@@ -854,8 +943,7 @@
         "type": "object",
         "required": [
           "email",
-          "password",
-          "display_name"
+          "password"
         ],
         "title": "RegisterRequest"
       },
@@ -876,7 +964,8 @@
       "SaveImageResponse": {
         "properties": {
           "image": {
-            "$ref": "#/components/schemas/ImageListItem"
+            "$ref": "#/components/schemas/ImageListItem",
+            "description": "Updated image record."
           }
         },
         "type": "object",
@@ -894,9 +983,7 @@
           },
           "token_type": {
             "type": "string",
-            "enum": [
-              "bearer"
-            ],
+            "const": "bearer",
             "title": "Token Type",
             "description": "Token type",
             "default": "bearer"
@@ -950,26 +1037,43 @@
         "required": [
           "id",
           "email",
-          "display_name",
           "created_at",
           "updated_at"
         ],
         "title": "UserPublic"
       },
-      "Body_upload_image_images_upload_post": {
+      "ValidationError": {
         "properties": {
-          "file": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
             "type": "string",
-            "format": "binary",
-            "title": "File",
-            "description": "Image file to upload"
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
           }
         },
         "type": "object",
         "required": [
-          "file"
+          "loc",
+          "msg",
+          "type"
         ],
-        "title": "Body_upload_image_images_upload_post"
+        "title": "ValidationError"
       }
     },
     "securitySchemes": {
@@ -978,5 +1082,23 @@
         "scheme": "bearer"
       }
     }
-  }
+  },
+  "tags": [
+    {
+      "name": "health",
+      "description": "Service health and diagnostics."
+    },
+    {
+      "name": "auth",
+      "description": "User registration and login (JWT bearer tokens)."
+    },
+    {
+      "name": "images",
+      "description": "Image upload, listing, metadata retrieval, and file download."
+    },
+    {
+      "name": "editing",
+      "description": "Non-destructive editing endpoints that create a new current image version."
+    }
+  ]
 }

@@ -1,8 +1,8 @@
 import os
 import uuid
-from contextlib import contextmanager
 from datetime import datetime, timezone
 from typing import Generator, Optional
+from urllib.parse import urlparse
 
 from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
@@ -12,33 +12,80 @@ def _utcnow() -> datetime:
     return datetime.now(tz=timezone.utc)
 
 
+def _normalize_host(raw_host: str) -> str:
+    """
+    Normalize POSTGRES_URL value into a host-only string when it contains a URL.
+
+    The DB container sometimes writes POSTGRES_URL as a URL (e.g. "postgresql://localhost:5000/myapp"),
+    while other deployments provide just a hostname (e.g. "localhost").
+    """
+    raw = (raw_host or "").strip()
+    if not raw:
+        return ""
+
+    if raw.startswith(("postgres://", "postgresql://")):
+        parsed = urlparse(raw)
+        # urlparse('postgresql://localhost:5000/myapp') -> hostname=localhost
+        return parsed.hostname or ""
+
+    # If it's already a host (or host:port), keep it; we'll handle host:port below.
+    return raw
+
+
+def _split_host_port(host_value: str, fallback_port: str) -> tuple[str, str]:
+    """
+    Split "host[:port]" into (host, port). If no port in host_value, use fallback_port.
+    """
+    hv = (host_value or "").strip()
+    if not hv:
+        return "", fallback_port
+
+    if ":" in hv:
+        host, port = hv.rsplit(":", 1)
+        return host.strip(), (port.strip() or fallback_port)
+
+    return hv, fallback_port
+
+
 # PUBLIC_INTERFACE
 def build_postgres_dsn() -> str:
     """
     Build a PostgreSQL DSN from environment variables provided by the database container.
 
-    Uses:
+    Expected env vars (database container conventions):
       - POSTGRES_URL, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB, POSTGRES_PORT
 
-    Returns:
-      A SQLAlchemy-compatible PostgreSQL DSN string.
+    Notes:
+      - Some environments provide POSTGRES_URL as a full URL (e.g. "postgresql://localhost:5000/myapp").
+        In that case, we will extract the hostname, and still rely on POSTGRES_PORT/DB/USER/PASSWORD.
+      - SQLAlchemy psycopg3 driver prefix is "postgresql+psycopg://".
     """
-    # NOTE: These env vars must be set in the container .env by the orchestrator.
-    host = os.getenv("POSTGRES_URL", "").strip()
+    raw_url = os.getenv("POSTGRES_URL", "").strip()
     user = os.getenv("POSTGRES_USER", "").strip()
     password = os.getenv("POSTGRES_PASSWORD", "").strip()
     db = os.getenv("POSTGRES_DB", "").strip()
     port = os.getenv("POSTGRES_PORT", "").strip()
 
-    if not all([host, user, password, db, port]):
-        missing = [k for k in ["POSTGRES_URL", "POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB", "POSTGRES_PORT"] if not os.getenv(k)]
+    if not all([raw_url, user, password, db, port]):
+        missing = [
+            k
+            for k in ["POSTGRES_URL", "POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB", "POSTGRES_PORT"]
+            if not (os.getenv(k) or "").strip()
+        ]
         raise RuntimeError(
             f"Missing required database environment variables: {', '.join(missing)}. "
             "Ask the orchestrator to populate them in the backend .env."
         )
 
-    # psycopg3 driver for SQLAlchemy: postgresql+psycopg://
-    return f"postgresql+psycopg://{user}:{password}@{host}:{port}/{db}"
+    host_norm = _normalize_host(raw_url)
+    host, effective_port = _split_host_port(host_norm, port)
+
+    if not host:
+        raise RuntimeError(
+            "Invalid POSTGRES_URL. Expected hostname (e.g. 'localhost') or URL (e.g. 'postgresql://localhost:5000/myapp')."
+        )
+
+    return f"postgresql+psycopg://{user}:{password}@{host}:{effective_port}/{db}"
 
 
 def get_engine() -> Engine:
@@ -75,7 +122,6 @@ def ensure_schema(engine: Optional[Engine] = None) -> None:
       - edit_history
     """
     eng = engine or get_engine()
-    # Minimal DDL matching SCHEMA.md (uuid PKs, basic indexes).
     ddl_statements = [
         """
         CREATE TABLE IF NOT EXISTS users (

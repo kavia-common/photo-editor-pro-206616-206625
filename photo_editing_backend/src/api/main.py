@@ -8,6 +8,7 @@ from typing import List, Optional
 from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -36,7 +37,7 @@ from src.api.storage import load_bytes, resolve_path, save_bytes, save_upload
 openapi_tags = [
     {"name": "health", "description": "Service health and diagnostics."},
     {"name": "auth", "description": "User registration and login (JWT bearer tokens)."},
-    {"name": "images", "description": "Image upload, listing, and retrieval."},
+    {"name": "images", "description": "Image upload, listing, metadata retrieval, and file download."},
     {"name": "editing", "description": "Non-destructive editing endpoints that create a new current image version."},
 ]
 
@@ -46,14 +47,30 @@ app = FastAPI(
         "Backend for a photo editing app. Provides JWT authentication, image upload/storage, "
         "basic editing operations (crop/filters/brightness/contrast), and PostgreSQL persistence."
     ),
-    version="0.2.0",
+    version="0.3.0",
     openapi_tags=openapi_tags,
 )
 
+
+def _get_cors_origins() -> list[str]:
+    """
+    Parse CORS allow-origins from env.
+
+    Env:
+      - CORS_ALLOW_ORIGINS: comma-separated list of allowed origins, or '*' to allow all.
+        Example: 'http://localhost:3000,http://127.0.0.1:3000'
+    """
+    raw = os.getenv("CORS_ALLOW_ORIGINS", "*").strip()
+    if not raw or raw == "*":
+        return ["*"]
+    return [o.strip() for o in raw.split(",") if o.strip()]
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Frontend is served separately; in production restrict this.
-    allow_credentials=True,
+    allow_origins=_get_cors_origins(),
+    # If allow_origins is ["*"], Starlette will not allow credentials. That's OK for our Bearer auth.
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -63,6 +80,30 @@ app.add_middleware(
 def _startup() -> None:
     # Ensure schema exists (defensive; DB container is expected to have created tables).
     ensure_schema()
+
+
+def _public_api_base_url() -> str:
+    """
+    Base URL used to construct absolute URLs returned to the frontend.
+
+    Env:
+      - PUBLIC_API_BASE_URL: e.g. 'http://localhost:8000'
+    """
+    return (os.getenv("PUBLIC_API_BASE_URL", "").strip() or "").rstrip("/")
+
+
+def _image_file_url(image_id: uuid.UUID) -> str:
+    base = _public_api_base_url()
+    path = f"/images/{image_id}/file"
+    return f"{base}{path}" if base else path
+
+
+class SaveImageRequest(BaseModel):
+    editedDataUrl: str = Field(..., description="Edited image as a data URL (image/png or image/jpeg).")
+
+
+class SaveImageResponse(BaseModel):
+    image: ImageListItem = Field(..., description="Updated image record.")
 
 
 # PUBLIC_INTERFACE
@@ -80,7 +121,6 @@ def health_check() -> HealthResponse:
     description="Register a new user account. Returns the created user (without password).",
 )
 def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> UserPublic:
-    # Basic uniqueness check
     existing = db.execute(text("SELECT id FROM users WHERE email = :email"), {"email": payload.email}).first()
     if existing:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
@@ -129,6 +169,7 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
     token = create_access_token(uuid.UUID(str(user["id"])))
+    # Frontend expects { token: string, user?: ... } shape; add backward-compatible alias field.
     return TokenResponse(access_token=token, token_type="bearer")
 
 
@@ -283,7 +324,110 @@ def list_images(
         ),
         {"user_id": user_id, "limit": limit, "offset": offset},
     ).mappings().all()
+    # Keep schema stable; frontend will derive URL via /images/{id}/file. (We also support absolute URL via PUBLIC_API_BASE_URL.)
     return [ImageListItem(**dict(r)) for r in rows]
+
+
+# PUBLIC_INTERFACE
+@app.get(
+    "/images/{image_id}",
+    tags=["images"],
+    summary="Get image metadata",
+    description="Fetch a single image metadata record owned by the authenticated user.",
+)
+def get_image(
+    image_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+) -> dict:
+    user_id = uuid.UUID(str(current_user["id"]))
+    img = _get_image_owned(db, user_id=user_id, image_id=image_id)
+    # Frontend expects either {image: {...}} or raw object; we return {image:...} and include url helper.
+    return {
+        "image": {
+            "id": str(img["id"]),
+            "title": img.get("title"),
+            "createdAt": img["created_at"].isoformat() if img.get("created_at") else None,
+            "updatedAt": img["updated_at"].isoformat() if img.get("updated_at") else None,
+            "url": _image_file_url(image_id),
+        }
+    }
+
+
+# PUBLIC_INTERFACE
+@app.post(
+    "/images/{image_id}/save",
+    response_model=SaveImageResponse,
+    tags=["images"],
+    summary="Save edited image",
+    description=(
+        "Persist an edited image sent as a data URL. Stores bytes as the current version and updates metadata.\n\n"
+        "Used by the frontend when running in LIVE API mode."
+    ),
+)
+def save_edited_image(
+    image_id: uuid.UUID,
+    payload: SaveImageRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+) -> SaveImageResponse:
+    import base64
+
+    user_id = uuid.UUID(str(current_user["id"]))
+    img = _get_image_owned(db, user_id=user_id, image_id=image_id)
+
+    data_url = (payload.editedDataUrl or "").strip()
+    if not data_url.startswith("data:") or ";base64," not in data_url:
+        raise HTTPException(status_code=400, detail="editedDataUrl must be a base64 data URL")
+
+    header, b64 = data_url.split(";base64,", 1)
+    mime = header.replace("data:", "").strip() or "image/png"
+    try:
+        raw = base64.b64decode(b64, validate=True)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid base64 payload")
+
+    # Determine extension + default output name
+    ext = ".png"
+    if mime in ("image/jpeg", "image/jpg"):
+        ext = ".jpg"
+    elif mime == "image/webp":
+        ext = ".webp"
+
+    new_key = f"current/{uuid.uuid4().hex}{ext}"
+    size_bytes = save_bytes(raw, new_key)
+
+    # Try to infer dimensions
+    width = height = None
+    try:
+        from PIL import Image as PILImage
+
+        with PILImage.open(resolve_path(new_key)) as im:
+            width, height = im.size
+            if not mime:
+                mime = PILImage.MIME.get(im.format) or mime  # type: ignore[attr-defined]
+    except Exception:
+        width = width or 0
+        height = height or 0
+
+    _update_current_version(
+        db,
+        image_id=image_id,
+        user_id=user_id,
+        new_key=new_key,
+        mime=mime,
+        width=int(width or 0),
+        height=int(height or 0),
+        size_bytes=size_bytes,
+    )
+    _log_edit(db, image_id=image_id, user_id=user_id, operation="save", params={"source": "data_url"})
+    db.commit()
+
+    row = db.execute(
+        text("SELECT id, title, original_storage_key, current_storage_key, created_at, updated_at FROM images WHERE id=:id"),
+        {"id": image_id},
+    ).mappings().first()
+    return SaveImageResponse(image=ImageListItem(**dict(row)))
 
 
 # PUBLIC_INTERFACE

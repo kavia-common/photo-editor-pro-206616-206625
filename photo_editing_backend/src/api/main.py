@@ -463,6 +463,18 @@ def save_edited_image(
     tags=["images"],
     summary="Get image file",
     description="Download the current version of an image; falls back to original if not edited yet.",
+    responses={
+        200: {
+            "description": "Binary image response (the image bytes).",
+            "content": {
+                # We may return different image types depending on upload/edit.
+                "image/jpeg": {"schema": {"type": "string", "format": "binary"}},
+                "image/png": {"schema": {"type": "string", "format": "binary"}},
+                "image/webp": {"schema": {"type": "string", "format": "binary"}},
+                "application/octet-stream": {"schema": {"type": "string", "format": "binary"}},
+            },
+        }
+    },
 )
 def get_image_file(
     image_id: uuid.UUID,

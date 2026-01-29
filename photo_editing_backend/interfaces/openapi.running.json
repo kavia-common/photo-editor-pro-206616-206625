@@ -307,9 +307,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Get Image Images  Image Id  Get"
+                  "$ref": "#/components/schemas/GetImageResponse"
                 }
               }
             }
@@ -756,6 +754,19 @@
         ],
         "title": "FilterRequest"
       },
+      "GetImageResponse": {
+        "properties": {
+          "image": {
+            "$ref": "#/components/schemas/ImageMeta",
+            "description": "Image metadata payload for the frontend."
+          }
+        },
+        "type": "object",
+        "required": [
+          "image"
+        ],
+        "title": "GetImageResponse"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -893,6 +904,63 @@
           "updated_at"
         ],
         "title": "ImageListItem"
+      },
+      "ImageMeta": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id",
+            "description": "Image ID"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title",
+            "description": "Image title"
+          },
+          "createdAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Createdat",
+            "description": "Created timestamp (ISO8601)"
+          },
+          "updatedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updatedat",
+            "description": "Updated timestamp (ISO8601)"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url",
+            "description": "URL to download the current image file"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "url"
+        ],
+        "title": "ImageMeta"
       },
       "LoginRequest": {
         "properties": {

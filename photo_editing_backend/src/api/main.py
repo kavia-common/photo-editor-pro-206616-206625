@@ -78,8 +78,22 @@ app.add_middleware(
 
 @app.on_event("startup")
 def _startup() -> None:
-    # Ensure schema exists (defensive; DB container is expected to have created tables).
-    ensure_schema()
+    """
+    App startup hook.
+
+    We attempt to ensure the DB schema exists, but the service should still start even if:
+      - the database container isn't running yet, or
+      - POSTGRES_* env vars are not configured.
+
+    In those cases, DB-backed endpoints will fail when called, but liveness/docs will remain available.
+    """
+    try:
+        # Ensure schema exists (defensive; DB container is expected to have created tables).
+        ensure_schema()
+    except Exception as exc:
+        # Don't prevent the API from starting when the DB is unavailable.
+        # This is important in environments where dependencies may start out-of-order.
+        print(f"⚠️  Startup DB initialization skipped: {exc}")
 
 
 def _public_api_base_url() -> str:
